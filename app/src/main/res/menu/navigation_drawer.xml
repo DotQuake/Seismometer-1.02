@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/startservice"
+        android:orderInCategory="100"
+        android:title="Start Services"
+        android:visible="true"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/stopservice"
+        android:orderInCategory="100"
+        android:title="Stop Services"
+        android:visible="true"
+        app:showAsAction="never" />
+</menu>
