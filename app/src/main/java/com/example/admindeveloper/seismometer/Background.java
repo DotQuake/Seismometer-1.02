@@ -281,7 +281,8 @@ public class Background extends Service implements SensorEventListener {
     @Override
     public void onSensorChanged(SensorEvent sensorEvent) {
        if (sensorEvent.sensor.getType() == Sensor.TYPE_ORIENTATION) {
-            compass = String.valueOf(sensorEvent.values[0]);
+           int deg = (int)Math.floor(sensorEvent.values[0]);
+           compass=(deg+90)>360?String.valueOf(deg-270):String.valueOf(deg+90);
         }
 
     }

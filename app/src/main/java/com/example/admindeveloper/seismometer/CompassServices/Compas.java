@@ -56,16 +56,9 @@ public class Compas extends Fragment{
                     //text.setText("Value of Accelerometer: " + str);
                     float value = Float.parseFloat(intent.getExtras().get("compass").toString());
                     int deg = (int)Math.floor(value);
+                    mcompass.setText(String.valueOf(deg));
                     //float deg = 0;
                     cpc.deviceTurned(deg);
-                    if(deg+90 > 360){
-
-                        mcompass.setText(""+(deg-270));
-                        //displayDirectionText();
-                    }else{
-                        mcompass.setText(""+(deg+90));
-                        //displayDirectionText();
-                    }
                     image.startAnimation(displayAnimation(cpc.getDegree(),currentdegree,image));
                     currentdegree = -cpc.getDegree();
                 }
