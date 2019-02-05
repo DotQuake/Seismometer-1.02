@@ -39,7 +39,7 @@ public class RealTime extends Fragment{
     GraphView dataGraph;
     TextView hourBox,minuteBox;
 
-    private void displayData(int x , int y , int z) {
+    private void displayData(Short x , Short y , Short z) {
         rtc.updateXYZ(x,y,z);
         dataGraphController.displayRawDataGraph(rtc.getX(),rtc.getY(),rtc.getZ());
         Date currentDate=Calendar.getInstance().getTime();
@@ -75,7 +75,7 @@ public class RealTime extends Fragment{
         }
         //showMessage();
         dataGraph=myView.findViewById(R.id.dataGraph);
-        dataGraphController=new DisplayGraph(dataGraph);
+        dataGraphController=new DisplayGraph(dataGraph,500);
         hourBox=myView.findViewById(R.id.hourBox);
         minuteBox=myView.findViewById(R.id.minuteBox);
         return myView;
@@ -111,9 +111,9 @@ public class RealTime extends Fragment{
             br = new BroadcastReceiver() {
                 @Override
                 public void onReceive(Context context, Intent intent) {
-                    displayData(intent.getIntExtra("valueX",0)
-                            ,intent.getIntExtra("valueY",0)
-                            ,intent.getIntExtra("valueZ",0));
+                    displayData(intent.getShortExtra("valueX",(short)0)
+                            ,intent.getShortExtra("valueY",(short)0)
+                            ,intent.getShortExtra("valueZ",(short)0));
                 }
             };
         }

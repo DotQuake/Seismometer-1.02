@@ -8,9 +8,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class RecordSaveData {
-    private List<Float> x_values = new ArrayList<>();
-    private List<Float> y_values = new ArrayList<>();
-    private List<Float> z_values = new ArrayList<>();
+    private List<Integer> x_values = new ArrayList<>();
+    private List<Integer> y_values = new ArrayList<>();
+    private List<Integer> z_values = new ArrayList<>();
     private List<String> time_values = new ArrayList<>();
     private int sum_of_samples = 0;
     public void clearData()
@@ -20,7 +20,7 @@ public class RecordSaveData {
         z_values.clear();
         time_values.clear();
     }
-    public void recordData(float x, float y, float z, String time){
+    public void recordData(Integer x, Integer y, Integer z, String time){
         x_values.add(x);
         y_values.add(y);
         z_values.add(z);

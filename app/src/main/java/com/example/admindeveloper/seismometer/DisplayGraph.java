@@ -14,12 +14,30 @@ public class DisplayGraph {
     GraphView dataGraph;
 
     private int counter=0;
-    LineGraphSeries<DataPoint> lineX,lineY,lineZ;
+    LineGraphSeries<DataPoint> lineX,lineY,lineZ,pointer;
+    private DataPoint[] dataX,dataY,dataZ;
+    private int maxSamplesToDisplay;
 
-    private void initializeDataGraph()
+    private void setPointer(int x){
+        DataPoint[] linePointer=new DataPoint[2];
+        linePointer[0]=new DataPoint(x,-65535);
+        linePointer[1]=new DataPoint(x,65535);
+        pointer.resetData(linePointer);
+    }
+    private void initializeDataGraph(int maxSamplesToDisplay)
     {
+        this.maxSamplesToDisplay=maxSamplesToDisplay;
+        dataX=new DataPoint[maxSamplesToDisplay];
+        dataY=new DataPoint[maxSamplesToDisplay];
+        dataZ=new DataPoint[maxSamplesToDisplay];
+        for(int count=0;count<maxSamplesToDisplay;count++){
+            dataX[count]=new DataPoint(count, 0);
+            dataY[count]=new DataPoint(count,0);
+            dataZ[count]=new DataPoint(count,0);
+        }
         if(lineX==null)
         {
+            pointer=new LineGraphSeries<>();
             lineX=new LineGraphSeries<>();
             lineY=new LineGraphSeries<>();
             lineZ=new LineGraphSeries<>();
@@ -28,22 +46,27 @@ public class DisplayGraph {
             lineX.setDrawDataPoints(false);
             lineX.setTitle("X");
             lineY.setThickness(5);
-            lineY.setColor(Color.BLACK);
+            lineY.setColor(Color.CYAN);
             lineY.setDrawDataPoints(false);
             lineY.setTitle("Y");
             lineZ.setThickness(5);
-            lineZ.setColor(Color.BLUE);
+            lineZ.setColor(Color.GREEN);
             lineZ.setDrawDataPoints(false);
             lineZ.setTitle("Z");
+            pointer.setColor(Color.BLACK);
+            pointer.setThickness(5);
+            setPointer(0);
             dataGraph.addSeries(lineX);
             dataGraph.addSeries(lineY);
             dataGraph.addSeries(lineZ);
+            dataGraph.addSeries(pointer);
             dataGraph.getViewport().setYAxisBoundsManual(true);
-            dataGraph.getViewport().setMinY(17000);
-            dataGraph.getViewport().setMaxY(24000);
+            dataGraph.getViewport().setMinY(-10000);
+            dataGraph.getViewport().setMaxY(10000);
             dataGraph.getViewport().setXAxisBoundsManual(true);
             dataGraph.getViewport().setMinX(0);
             dataGraph.getViewport().setMaxX(500);
+            lineX.resetData(dataX);lineY.resetData(dataX);lineZ.resetData(dataX);
         }
     }
 
@@ -63,17 +86,23 @@ public class DisplayGraph {
         });
     }
 
-    public void displayRawDataGraph(int x , int y , int z) {
-        lineX.appendData(new DataPoint(counter,x),true,500);
-        lineY.appendData(new DataPoint(counter,y),true,500);
-        lineZ.appendData(new DataPoint(counter,z),true,500);
-        counter++;
+    public void displayRawDataGraph(Integer x , Integer y , Integer z) {
+        dataX[counter]=new DataPoint(counter,x);
+        dataY[counter]=new DataPoint(counter,y);
+        dataZ[counter]=new DataPoint(counter++,z);
+        if(counter%50==0){
+            lineX.resetData(dataX);
+            lineY.resetData(dataY);
+            lineZ.resetData(dataZ);
+            setPointer(counter);
+        }
+        counter=counter>=maxSamplesToDisplay?0:counter;
     }
 
-    public DisplayGraph(GraphView dataGraph)
+    public DisplayGraph(GraphView dataGraph,int maxSamplesToDisplay)
     {
         this.dataGraph=dataGraph;
-        initializeDataGraph();
+        initializeDataGraph(maxSamplesToDisplay);
         setCustomLabel();
     }
 }

@@ -1,8 +1,12 @@
 package com.example.admindeveloper.seismometer;
 
 import android.Manifest;
+import android.bluetooth.BluetoothAdapter;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -29,6 +33,22 @@ import com.example.admindeveloper.seismometer.UploadServices.Upload;
 public class NavigationDrawer extends AppCompatActivity
         implements NavigationView.OnNavigationItemSelectedListener {
 
+    private final BroadcastReceiver mBroadcastReceiver=new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if(intent.getAction().equals(Background.ACTION_REQUEST_BT)){
+                Toast.makeText(getApplicationContext(),"REQUEST BLUETOOTH ON",Toast.LENGTH_SHORT).show();
+                Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+                startActivity(enableBtIntent);
+            }
+        }
+    };
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        unregisterReceiver(mBroadcastReceiver);
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

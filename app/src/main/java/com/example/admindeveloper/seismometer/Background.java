@@ -3,8 +3,10 @@ package com.example.admindeveloper.seismometer;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.app.PendingIntent;
 import android.app.Service;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothSocket;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -13,13 +15,9 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
-import android.hardware.usb.UsbDevice;
-import android.hardware.usb.UsbDeviceConnection;
-import android.hardware.usb.UsbManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
-import android.os.Binder;
 import android.os.Bundle;
 import android.os.FileObserver;
 import android.os.Handler;
@@ -32,9 +30,6 @@ import android.widget.Toast;
 
 import com.example.admindeveloper.seismometer.RealTimeServices.RealTimeController;
 import com.example.admindeveloper.seismometer.UploadServices.ZipManager;
-import com.felhr.usbserial.CDCSerialDevice;
-import com.felhr.usbserial.UsbSerialDevice;
-import com.felhr.usbserial.UsbSerialInterface;
 
 import net.gotev.uploadservice.MultipartUploadRequest;
 import net.gotev.uploadservice.ServerResponse;
@@ -43,13 +38,15 @@ import net.gotev.uploadservice.UploadNotificationConfig;
 import net.gotev.uploadservice.UploadStatusDelegate;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public class Background extends Service implements SensorEventListener {
@@ -88,7 +85,6 @@ public class Background extends Service implements SensorEventListener {
 
     Runnable runnable;
 
-
     @SuppressLint("MissingPermission")
     @Override
     public void onCreate() {
@@ -119,13 +115,26 @@ public class Background extends Service implements SensorEventListener {
         };
         locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 10000, 0, locationListener);
 
+        this.ServiceStarted=true;
+        mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        if (mBluetoothAdapter == null) {
+            // Device doesn't support Bluetooth
+            toastMessage("SERVICE: Bluetooth Not Supported");
+        } else {
+            IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
+            filter.addAction(BluetoothDevice.ACTION_FOUND);
+            filter.addAction(BluetoothAdapter.ACTION_DISCOVERY_STARTED);
+            filter.addAction(Background.ACTION_SEND_MESSAGE);
+            filter.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
+            registerReceiver(mBroadcastReceiver, filter);
 
-        this.context = this;
-        serialPortConnected = false;
-        Background.SERVICE_CONNECTED = true;
-        setFilter();
-        usbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
-        findSerialPortDevice();
+            if (!mBluetoothAdapter.isEnabled()) {
+                mBluetoothAdapter.enable();
+            }else{
+                StartService();
+            }
+
+        }
 
     }
 
@@ -267,14 +276,24 @@ public class Background extends Service implements SensorEventListener {
     public void onDestroy() {
         super.onDestroy();
         mSensorManager.unregisterListener(this);
+        this.ServiceStarted=false;
+        if(bluetoothSocket.isConnected()){
+            try {
+                bluetoothSocket.close();
+            } catch (IOException e) {
+                toastMessage("SERVICE: Cannot Close");
+            }
+        }
+        unregisterReceiver(mBroadcastReceiver);
         Toast.makeText(this,"Service Stopped",Toast.LENGTH_SHORT).show();
         handler.removeCallbacks(runnable);
         if(locationManager != null){
             locationManager.removeUpdates(locationListener);
         }
-
-        unregisterReceiver(usbReceiver);
-        Background.SERVICE_CONNECTED = false;
+        if(mBluetoothAdapter.isEnabled()){
+            outputStream('D');
+            mBluetoothAdapter.disable();
+        }
     }
 
 
@@ -367,187 +386,247 @@ public class Background extends Service implements SensorEventListener {
     }
 
 
+    //BLUETOOTH
 
 
+    private BluetoothAdapter mBluetoothAdapter;
+    private String HC06DeviceName="HC-06";
+    private String HC06DeviceAddress;
+    private BluetoothDevice bluetoothDevice;
+    private BluetoothSocket bluetoothSocket;
+    private InputStream mInputStream;
+    private OutputStream mOutputStream;
 
+    public static boolean ServiceStarted=false;
 
-    //ADDED FUNCTIONS FOR USB CDC BELOW
+    private boolean calibrationFlag=false;
+    private Integer calibrateX=0,calibrateY=0,calibrateZ=0;
+    private final int maxSamples=100;
 
+    public static String ACTION_START_SERVICE  =  "com.dotquake.bluetoothservice.ACTION_START_SERVICE";
+    public static String ACTION_STOP_SERVICE  =  "com.dotquake.bluetoothservice.ACTION_STOP_SERVICE";
+    public static String ACTION_REQUEST_BT="com.dotquake.bluetoothservice.ACTION_REQUEST_BT";
+    public static String ACTION_DATA_READY="com.dotquake.bluetoothservice.ACTION_DATA_READY";
+    public static String ACTION_SEND_MESSAGE="com.dotquake.bluetoothservice.ACTION_SEND_MESSAGE";
 
-
-
-
-
-
-
-
-    public static final String ACTION_USB_READY = "com.felhr.connectivityservices.USB_READY";
-    public static final String ACTION_USB_ATTACHED = "android.hardware.usb.action.USB_DEVICE_ATTACHED";
-    public static final String ACTION_USB_DETACHED = "android.hardware.usb.action.USB_DEVICE_DETACHED";
-    public static final String ACTION_USB_NOT_SUPPORTED = "com.felhr.usbservice.USB_NOT_SUPPORTED";
-    public static final String ACTION_NO_USB = "com.felhr.usbservice.NO_USB";
-    public static final String ACTION_USB_PERMISSION_GRANTED = "com.felhr.usbservice.USB_PERMISSION_GRANTED";
-    public static final String ACTION_USB_PERMISSION_NOT_GRANTED = "com.felhr.usbservice.USB_PERMISSION_NOT_GRANTED";
-    public static final String ACTION_USB_DISCONNECTED = "com.felhr.usbservice.USB_DISCONNECTED";
-    public static final String ACTION_CDC_DRIVER_NOT_WORKING = "com.felhr.connectivityservices.ACTION_CDC_DRIVER_NOT_WORKING";
-    public static final String ACTION_USB_DEVICE_NOT_WORKING = "com.felhr.connectivityservices.ACTION_USB_DEVICE_NOT_WORKING";
-    public static final int MESSAGE_FROM_SERIAL_PORT = 0;
-    private static final String ACTION_USB_PERMISSION = "com.android.example.USB_PERMISSION";
-    private static final int BAUD_RATE = 9600; // BaudRate. Change this value if you need
-    public static boolean SERVICE_CONNECTED = false;
-
-    private Context context;
-    private Handler mHandler;
-    private UsbManager usbManager;
-    private UsbDevice device;
-    private UsbDeviceConnection connection;
-    private UsbSerialDevice serialPort;
-
-    private boolean serialPortConnected;
-
-    private Integer x, y, z;
-
-    private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
+    private final BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
         @Override
-        public void onReceive(Context arg0, Intent arg1) {
-            if (arg1.getAction().equals(ACTION_USB_PERMISSION)) {
-                boolean granted = arg1.getExtras().getBoolean(UsbManager.EXTRA_PERMISSION_GRANTED);
-                if (granted) // User accepted our USB connection. Try to open the device as a serial port
-                {
-                    Intent intent = new Intent(ACTION_USB_PERMISSION_GRANTED);
-                    arg0.sendBroadcast(intent);
-                    connection = usbManager.openDevice(device);
-                    serialPortConnected = true;
-                    new ConnectionThread().run();
-                } else // User not accepted our USB connection. Send an Intent to the Main Activity
-                {
-                    Intent intent = new Intent(ACTION_USB_PERMISSION_NOT_GRANTED);
-                    arg0.sendBroadcast(intent);
+        public void onReceive(Context context, Intent intent) {
+            final String action = intent.getAction();
 
-                }
-            } else if (arg1.getAction().equals(ACTION_USB_ATTACHED)) {
-                if (!serialPortConnected)
-                    findSerialPortDevice(); // A USB device has been attached. Try to open it as a Serial port
-            } else if (arg1.getAction().equals(ACTION_USB_DETACHED)) {
-                // Usb device was disconnected. send an intent to the Main Activity
-                Intent intent = new Intent(ACTION_USB_DISCONNECTED);
-                arg0.sendBroadcast(intent);
-                serialPortConnected = false;
-                serialPort.close();
-            }
-        }
-    };
+            if(action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
 
-    private UsbSerialInterface.UsbReadCallback mCallback = new UsbSerialInterface.UsbReadCallback() {
-        @Override
-        public void onReceivedData(byte[] arg0) {
+                int mode = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
 
-            byte[] valueX = {0x00, 0x00,arg0[1], arg0[0]};
-            byte[] valueY = {0x00, 0x00,arg0[2], arg0[3]};
-            byte[] valueZ = {0x00, 0x00,arg0[4], arg0[5]};
-
-            x=ByteBuffer.wrap(valueX).getInt();
-            y=ByteBuffer.wrap(valueY).getInt();
-            z=ByteBuffer.wrap(valueZ).getInt();
-
-            time = ""+ SystemClock.uptimeMillis() ;
-
-            realTimeController.updateXYZ(x, y, z);
-            recordSaveData1.recordData(realTimeController.getX(), realTimeController.getY(), realTimeController.getZ(), time);
-            i.putExtra("valueX", realTimeController.getX());
-            i.putExtra("valueY", realTimeController.getY());
-            i.putExtra("valueZ", realTimeController.getZ());
-            i.putExtra("compass",compass);
-            i.setAction("FILTER");
-            sendBroadcast(i);
-        }
-    };
-
-    public void write(byte[] data) {
-        if (serialPort != null)
-            serialPort.write(data);
-    }
-
-    private void findSerialPortDevice() {
-        // This snippet will try to open the first encountered usb device connected, excluding usb root hubs
-        HashMap<String, UsbDevice> usbDevices = usbManager.getDeviceList();
-        if (!usbDevices.isEmpty()) {
-            boolean keep = true;
-            for (Map.Entry<String, UsbDevice> entry : usbDevices.entrySet()) {
-                device = entry.getValue();
-                int deviceVID = device.getVendorId();
-                int devicePID = device.getProductId();
-
-                if (deviceVID == 1155 && devicePID == 22336) {
-                    // There is a device connected to our Android device. Try to open it as a Serial Port.
-                    requestUserPermission();
-                    keep = false;
-                } else {
-                    connection = null;
-                    device = null;
-                }
-
-                if (!keep)
-                    break;
-            }
-            if (!keep) {
-                // There is no USB devices connected (but usb host were listed). Send an intent to MainActivity.
-                Intent intent = new Intent(ACTION_NO_USB);
-                sendBroadcast(intent);
-            }
-        } else {
-            // There is no USB devices connected. Send an intent to MainActivity
-            Intent intent = new Intent(ACTION_NO_USB);
-            sendBroadcast(intent);
-        }
-    }
-
-    private void setFilter() {
-        IntentFilter filter = new IntentFilter();
-        filter.addAction(ACTION_USB_PERMISSION);
-        filter.addAction(ACTION_USB_DETACHED);
-        filter.addAction(ACTION_USB_ATTACHED);
-        registerReceiver(usbReceiver, filter);
-    }
-
-    private void requestUserPermission() {
-        PendingIntent mPendingIntent = PendingIntent.getBroadcast(this, 0, new Intent(ACTION_USB_PERMISSION), 0);
-        usbManager.requestPermission(device, mPendingIntent);
-    }
-
-    private class ConnectionThread extends Thread {
-        @Override
-        public void run() {
-            serialPort = UsbSerialDevice.createUsbSerialDevice(device, connection);
-            if (serialPort != null) {
-                if (serialPort.open()) {
-                    serialPort.setBaudRate(BAUD_RATE);
-                    serialPort.setDataBits(UsbSerialInterface.DATA_BITS_8);
-                    serialPort.setStopBits(UsbSerialInterface.STOP_BITS_1);
-                    serialPort.setParity(UsbSerialInterface.PARITY_NONE);
-                    serialPort.setFlowControl(UsbSerialInterface.FLOW_CONTROL_OFF);
-                    serialPort.read(mCallback);
-
-                    // Everything went as expected. Send an intent to MainActivity
-                    Intent intent = new Intent(ACTION_USB_READY);
-                    context.sendBroadcast(intent);
-                } else {
-                    // Serial port could not be opened, maybe an I/O error or if CDC driver was chosen, it does not really fit
-                    // Send an Intent to Main Activity
-                    if (serialPort instanceof CDCSerialDevice) {
-                        Intent intent = new Intent(ACTION_CDC_DRIVER_NOT_WORKING);
-                        context.sendBroadcast(intent);
-                    } else {
-                        Intent intent = new Intent(ACTION_USB_DEVICE_NOT_WORKING);
-                        context.sendBroadcast(intent);
+                switch(mode){
+                    case BluetoothAdapter.STATE_ON: {
+                        toastMessage("SERVICE: Bluetooth On");
+                        StartService();
+                        break;
+                    }
+                    case BluetoothAdapter.STATE_TURNING_ON: {
+                        mBluetoothAdapter.enable();
+                        toastMessage("SERVICE: Bluetooth Turning On");
+                        break;
+                    }
+                    case BluetoothAdapter.STATE_OFF: {
+                        toastMessage("SERVICE: Bluetooth Turning Off");
+                        break;
                     }
                 }
-            } else {
-                // No driver for given device, even generic CDC driver could not be loaded
-                Intent intent = new Intent(ACTION_USB_NOT_SUPPORTED);
-                context.sendBroadcast(intent);
+            }else if (BluetoothDevice.ACTION_FOUND.equals(action)) {
+                // Discovery has found a device. Get the BluetoothDevice
+                // object and its info from the Intent.
+                try {
+                    BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                    if (device.getName().equals(HC06DeviceName)) {
+                        mBluetoothAdapter.cancelDiscovery();
+                        toastMessage("SERVICE: Device Detected");
+                        bluetoothDevice = device;
+                        InitializeConnection(bluetoothDevice);
+                    }
+                }catch(Exception e){}
+            }else if(BluetoothAdapter.ACTION_DISCOVERY_STARTED.equals(action)) {
+                toastMessage("SERVICE: Discovering");
+            }else if(BluetoothAdapter.ACTION_DISCOVERY_FINISHED.equals(action)){
+                toastMessage("SERVICE: Done Discovering");
+            }else if(Background.ACTION_SEND_MESSAGE.equals(action)){
+                char command=intent.getCharExtra("command",'P');
+                if(command=='P'){
+                    outputStream('P');
+                }else{
+                    outputStream('D');
+                }
             }
         }
+    };
+
+    private void toastMessage(String message){
+        Toast.makeText(getApplicationContext(),message,Toast.LENGTH_SHORT).show();
     }
+
+    private void StartService() {
+        bluetoothDevice=null;
+        if(!QueryDevice())
+        {
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try{
+                        if (mBluetoothAdapter.isDiscovering()) {
+                            mBluetoothAdapter.cancelDiscovery();
+                        }
+                        mBluetoothAdapter.startDiscovery();
+                        while(bluetoothDevice==null){
+                            if(!mBluetoothAdapter.isDiscovering()){
+                                mBluetoothAdapter.startDiscovery();
+                            }
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        toastMessage("SERVICE: Error Discovery");
+                    }
+                }
+            }).start();
+        }else{
+            InitializeConnection(bluetoothDevice);
+        }
+        mInputStream=null;
+        mOutputStream=null;
+        try {
+            mInputStream=bluetoothSocket.getInputStream();
+        } catch (IOException e) {
+            toastMessage("SERVICE: Failed to get InputStream");
+        }
+        try {
+            mOutputStream=bluetoothSocket.getOutputStream();
+        } catch (IOException e) {
+            toastMessage("SERVICE: Failed to get OutputStream");
+        }
+        if(mOutputStream!=null&&mInputStream!=null){
+            outputStream('D');
+            InputStream();
+        }
+    }
+    private boolean QueryDevice() {
+        try {
+            Set<BluetoothDevice> pairedDevices = mBluetoothAdapter.getBondedDevices();
+
+            if (pairedDevices.size() > 0) {
+                // There are paired devices. Get the name and address of each paired device.
+                for (BluetoothDevice device : pairedDevices) {
+                    if (device.getName().equals(HC06DeviceName)) {
+                        bluetoothDevice = device;
+                        return true;
+                    }
+                }
+            }
+        }catch(Exception e){
+            toastMessage("SERVICE: Query Error");
+        }
+        return false;
+    }
+    private boolean InitializeConnection(BluetoothDevice device) {
+        Toast.makeText(getApplicationContext(), "SERVICE: Now Initializing", Toast.LENGTH_SHORT).show();
+        try {
+            // Get a BluetoothSocket to connect with the given BluetoothDevice.
+            // MY_UUID is the app's UUID string, also used in the server code.
+            bluetoothSocket = device.createRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"));
+            toastMessage("SERVICE: RFCOMM Establish");
+        }
+        catch (IOException e) {
+            toastMessage("SERVICE: Connection init failed");
+        }
+        try {
+            // Connect to the remote device through the socket. This call blocks
+            // until it succeeds or throws an exception.
+            bluetoothSocket.connect();
+            toastMessage("SERVICE: Success");
+            return true;
+        } catch (IOException connectException) {
+            // Unable to connect; close the socket and return.
+            try {
+                toastMessage("SERVICE: Connect Fail");
+                bluetoothSocket.close();
+            } catch (IOException closeException) {
+                toastMessage("SERVICE: Cannot closed");
+            }
+        }
+        return false;
+    }
+    //Careful of using this function, this will create a permanent while loop if wrong command or size has been inputted
+    private void InputStream()
+    {
+        new Thread(new Runnable() {
+            private Short byteToShort(byte[] value)
+            {
+                ByteBuffer wrapper=ByteBuffer.wrap(value);
+                return wrapper.getShort();
+            }
+            @Override
+            public void run() {
+                byte[] mmBuffer=new byte[6];
+                Short x;
+                Short y;
+                Short z;
+                int countStartingSamples=1;
+                // Keep listening to the InputStream until an exception occurs.
+                while (true) {
+                    try {
+                        // Read from the InputStream.
+                        while(mInputStream.available()>=6) {
+                            mInputStream.read(mmBuffer);
+                            byte[] valueX = {mmBuffer[1], mmBuffer[0]};
+                            byte[] valueY = {mmBuffer[3], mmBuffer[2]};
+                            byte[] valueZ = {mmBuffer[5], mmBuffer[4]};
+                            x = byteToShort(valueX);
+                            y = byteToShort(valueY);
+                            z = byteToShort(valueZ);
+                            if(calibrationFlag==true) {
+                                time = "" + SystemClock.uptimeMillis();
+
+                                realTimeController.updateXYZ(x, y, z);
+                                recordSaveData1.recordData(realTimeController.getX(), realTimeController.getY(), realTimeController.getZ(), time);
+                                i.putExtra("valueX", x);
+                                i.putExtra("valueY", y);
+                                i.putExtra("valueZ", z);
+                                i.putExtra("compass", compass);
+                                i.setAction("FILTER");
+                                sendBroadcast(i);
+                            }else{
+                                if(countStartingSamples<maxSamples){
+                                    calibrateX+=Integer.parseInt(String.valueOf(x));
+                                    calibrateY+=Integer.parseInt(String.valueOf(y));
+                                    calibrateZ+=Integer.parseInt(String.valueOf(z));
+                                    countStartingSamples++;
+                                }else{
+                                    calibrationFlag=true;
+                                    calibrateX/=countStartingSamples;
+                                    calibrateY/=countStartingSamples;
+                                    calibrateZ/=countStartingSamples;
+                                    realTimeController.setCalibrationValue(calibrateX,calibrateY,calibrateZ);
+                                }
+                            }
+                        }
+                        // Send the obtained bytes to the UI activity.
+                    } catch (IOException e) {
+                        //toastMessage("SERVICE: Input stream was disconnected");
+                        break;
+                    }
+                }
+            }
+        }).start();
+    }
+
+    private void outputStream(char command){
+        try {
+            mOutputStream.write(command);
+        } catch (IOException e) {
+            toastMessage("SERVICE: Failed to send");
+        }
+    }
+
+
 }
 
