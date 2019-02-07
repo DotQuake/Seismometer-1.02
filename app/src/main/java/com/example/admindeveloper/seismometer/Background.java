@@ -72,6 +72,8 @@ public class Background extends Service implements SensorEventListener {
     long StartTime;
     String time;
 
+    int sec;
+
     String fileName;
 
     String ipaddress;
@@ -79,6 +81,8 @@ public class Background extends Service implements SensorEventListener {
     String longitude;
     String latitutde;
     String compass;
+
+    long resettime=0;
 
     private LocationManager locationManager;
     private LocationListener locationListener;
@@ -166,10 +170,9 @@ public class Background extends Service implements SensorEventListener {
         mSensorManager.registerListener(this, mSensorManager.getSensorList(Sensor.TYPE_ORIENTATION).get(0), SensorManager.SENSOR_DELAY_GAME);
         //endregion
         //region ------------------- Set up for Delay / Start Up --------------------
-        Calendar calendar = Calendar.getInstance();                     // getting instance
-        SimpleDateFormat simpleDateFormat = new SimpleDateFormat("ss");       // format hour
-        Date date = calendar.getTime();                             // getting current time
-        final int sec = (60 - Integer.parseInt(simpleDateFormat.format(date))) * 1000; // parsing string to int
+        Calendar settime1 = Calendar.getInstance();
+        sec = (60 - settime1.get(Calendar.SECOND)) * 1000;
+        resettime = SystemClock.uptimeMillis();
         //endregion
 
         //region ---------------------(HANDLER) Special Delay Call (Infinite Loop in an definite delay)--------------------
@@ -177,19 +180,35 @@ public class Background extends Service implements SensorEventListener {
                 runnable = new Runnable() {
                     @Override
                     public void run() {
-                        // ------------- Se Up -----------
+                        // ------------- Set Up -----------
                         String status;
                        // Toast.makeText(getApplicationContext(), "Saving in Progress", Toast.LENGTH_SHORT).show();
+                        resettime = SystemClock.uptimeMillis();
                         if(iappendctr == 0 && !append) {
                             compressionflag = false;
-                            Date currentTime = Calendar.getInstance().getTime();
-                            fileName = (currentTime.getYear() + 1900) + "-" + (currentTime.getMonth() + 1) + "-" + currentTime.getDate() + "-" + currentTime.getHours() + "-" + currentTime.getMinutes() + "-" + currentTime.getSeconds() + ".csv";
+                            Calendar setnamedate = Calendar.getInstance();
+                            fileName = setnamedate.get(Calendar.YEAR) + "-" + (setnamedate.get(Calendar.MONTH)+1)  + "-" + setnamedate.get(Calendar.DATE)  + "-" + setnamedate.get(Calendar.HOUR)  + "-" + setnamedate.get(Calendar.MINUTE)  + "-" + setnamedate.get(Calendar.SECOND)  + ".csv";
                         }
                         // -------------- Save / Clear -------------
                         if(iappendctr+1 >= limitappend) {
                             compressionflag = true;
                         }
-                            status = recordSaveData1.saveEarthquakeData("0", fileName, longitude, latitutde, compass, append , iappendctr, limitappend);      // saving Data to a specific Location (Samples)
+                        /*SaveFileService.startActionSave(getApplicationContext(),recordSaveData1,"0",fileName,longitude,latitutde,compass,append,iappendctr,limitappend);
+                        recordSaveData1.clearData();          // deleting recorded data
+                        append = true;
+                        iappendctr++;
+                        if(iappendctr >= limitappend) {
+                            csvnames.add(fileName);
+                            iappendctr = 0;
+                            append = false;
+                        }
+
+                        //------------------ Initialize Delay for the next Call -----------------
+                        Calendar settime = Calendar.getInstance();
+                        sec = (60 - settime.get(Calendar.SECOND)) * 1000; // seconds delay for minute
+                        // ----------------- Recursive Call --------------------------
+                        handler.postDelayed(this, sec);*/
+                        status = recordSaveData1.saveEarthquakeData("0", fileName, longitude, latitutde, compass, append , iappendctr, limitappend);      // saving Data to a specific Location (Samples)
 
 
                         Toast.makeText(getApplicationContext(), status, Toast.LENGTH_SHORT).show();
@@ -205,10 +224,10 @@ public class Background extends Service implements SensorEventListener {
                                 }
 
                                 //------------------ Initialize Delay for the next Call -----------------
-                                Date settime = Calendar.getInstance().getTime();
-                                int secnew = (60 - settime.getSeconds()) * 1000; // seconds delay for minute
+                                Calendar settime = Calendar.getInstance();
+                                sec = (60 - settime.get(Calendar.SECOND)) * 1000; // seconds delay for minute
                                 // ----------------- Recursive Call --------------------------
-                                handler.postDelayed(this, secnew);
+                                handler.postDelayed(this, sec);
                                 break;
                             }
                             case "Error":{
@@ -584,7 +603,7 @@ public class Background extends Service implements SensorEventListener {
                             y = byteToShort(valueY);
                             z = byteToShort(valueZ);
                             if(calibrationFlag==true) {
-                                time = "" + SystemClock.uptimeMillis();
+                                time = ""+(SystemClock.uptimeMillis()-resettime);
 
                                 realTimeController.updateXYZ(x, y, z);
                                 recordSaveData1.recordData(realTimeController.getX(), realTimeController.getY(), realTimeController.getZ(), time);

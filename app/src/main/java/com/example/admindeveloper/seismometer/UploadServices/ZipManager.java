@@ -32,7 +32,7 @@ public class ZipManager {
 
     }*/
 
-    public Boolean compressGzipFile(String fileLocation, String gzipFileLocation) {
+    public void compressGzipFile(String fileLocation, String gzipFileLocation) {
         try {
             File myDir = new File("storage/emulated/0/Zip");
             if(!myDir.exists())
@@ -55,11 +55,9 @@ public class ZipManager {
             gzipOS.close();
             fos.close();
             fis.close();
-            return true;
         } catch (IOException e) {
             e.printStackTrace();
         }
-        return false;
 
     }
 

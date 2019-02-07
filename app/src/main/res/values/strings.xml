@@ -11,4 +11,5 @@
     <string name="upload">Upload</string>
     <string name="currentTime">CURRENT - HOUR: </string>
     <string name="minute">MINUTE:</string>
+    <string name="ipaddress">192.168.254.10</string>
 </resources>

@@ -14,7 +14,6 @@ public class CompassPageController {
     {
         this.degree=degree;
         this.direction=this.getDirection(degree);
-        return;
     }
     public int calculateDirection(float x, float y,float z ,float threshold,int degree) {
 // From the phone's point of view

@@ -1,13 +1,18 @@
 package com.example.admindeveloper.seismometer;
 
+import android.util.Log;
+
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStreamWriter;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
-public class RecordSaveData {
+import static android.support.constraint.Constraints.TAG;
+
+public class RecordSaveData implements Serializable {
     private List<Integer> x_values = new ArrayList<>();
     private List<Integer> y_values = new ArrayList<>();
     private List<Integer> z_values = new ArrayList<>();
@@ -83,10 +88,11 @@ public class RecordSaveData {
                 bw.write("g,g,g,g,\r\n");
                 bw.write("--------,--------,--------,,\r\n");
             }
-            for(int count=0;count<x_values.size();count++) {
+            //Log.d(TAG, x_values.toString()+" "+y_values.size()+" "+z_values.size()+time_values.size()+" ");
+            for(int count=0;count<x_values.size()&&count<y_values.size()&&count<z_values.size()&&count<time_values.size();count++) {
                 bw.write(x_values.get(count)+","+y_values.get(count)+","+z_values.get(count)+","+((sum_of_samples-x_values.size())+count)+","+time_values.get(count)+"\r\n");
             }
-            if(append && iappendctr+1 >= limitappend) {
+            if(iappendctr+1 >= limitappend) {
                 bw.write("       ,       ,       ,,\r\n" +
                         "       ,       ,       ,,\r\n" +
                         "END,END,END,,\r\n");
